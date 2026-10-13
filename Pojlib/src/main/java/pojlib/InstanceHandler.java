@@ -30,6 +30,7 @@ import pojlib.install.QuiltMeta;
 import pojlib.install.VersionInfo;
 import pojlib.util.Constants;
 import pojlib.util.FileUtil;
+import pojlib.util.RendererFallback;
 import pojlib.util.VLoader;
 import pojlib.util.download.DownloadManager;
 import pojlib.util.json.MinecraftInstances;
@@ -299,6 +300,22 @@ public class InstanceHandler {
         }
 
         return false;
+    }
+
+    // H6: persist a per-instance renderer choice ("vulkan" / "opengl").
+    // Invalid values are rejected; an explicit choice clears any pending
+    // renderer-fallback marker so the player's own choice always wins.
+    public static boolean setRenderer(MinecraftInstances instances, MinecraftInstances.Instance instance, String renderer) {
+        if (instance == null || instances == null) {
+            return false;
+        }
+        if (!"vulkan".equals(renderer) && !"opengl".equals(renderer)) {
+            return false;
+        }
+        instance.renderer = renderer;
+        RendererFallback.clearMarker(instance);
+        GsonUtils.objectToJsonFile(Constants.USER_HOME + "/instances.json", instances);
+        return true;
     }
 
     // Return true if instance was deleted

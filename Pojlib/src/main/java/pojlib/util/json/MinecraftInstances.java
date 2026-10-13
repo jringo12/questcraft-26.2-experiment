@@ -18,6 +18,7 @@ import pojlib.APIHandler;
 import pojlib.InstanceHandler;
 import pojlib.util.Constants;
 import pojlib.util.FileUtil;
+import pojlib.util.RendererFallback;
 import pojlib.util.download.DownloadManager;
 import pojlib.util.download.DownloadUtils;
 import pojlib.util.GsonUtils;
@@ -82,6 +83,19 @@ public class MinecraftInstances {
         public String extraNatives;
         public ProjectInfo[] extProjects;
         public boolean defaultMods;
+        // H6: per-instance graphics backend ("vulkan" or "opengl"). Persisted
+        // in instances.json via Gson. Null for instances created before this
+        // field existed; getRenderer() maps that to the Vulkan default so
+        // existing instances keep current behaviour.
+        public String renderer;
+
+        // H6: effective renderer — Vulkan default for null/blank/unknown.
+        public String getRenderer() {
+            if ("opengl".equals(renderer) || "vulkan".equals(renderer)) {
+                return renderer;
+            }
+            return "vulkan";
+        }
 
         public List<String> generateLaunchArgs(MinecraftAccount account) {
             String[] mcArgs = {"--username", account.username, "--version", versionName, "--gameDir", gameDir,
@@ -94,8 +108,11 @@ public class MinecraftInstances {
             allArgs.add(mainClass);
             allArgs.addAll(Arrays.asList(mcArgs));
             if ("26.2".equals(versionName)) {
+                // H6: honour the per-instance renderer choice instead of
+                // hard-coding Vulkan. RendererFallback may substitute the
+                // other backend if the chosen one just failed to initialise.
                 allArgs.add("--graphicsBackend");
-                allArgs.add("vulkan");
+                allArgs.add(RendererFallback.getEffectiveRenderer(this));
             }
             if (account.isDemoMode) {
                 allArgs.add("--demo");

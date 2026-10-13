@@ -76,7 +76,20 @@ public class PojlibInstance
     public string mainClass;
     public string extraNatives;
     public bool defaultMods;
+    // H6: per-instance graphics backend ("vulkan" or "opengl"). Persisted on
+    // the Java instance (instances.json); null for instances created before
+    // this field existed, which GetRenderer() maps to the Vulkan default.
+    public string renderer;
     public AndroidJavaObject raw;
+
+    // H6: effective renderer — Vulkan default for null/blank/unknown values,
+    // preserving current behaviour for existing instances.
+    public string GetRenderer()
+    {
+        if (renderer == "opengl" || renderer == "vulkan")
+            return renderer;
+        return "vulkan";
+    }
 
     public static PojlibInstance Parse(AndroidJavaObject raw)
     {
@@ -93,6 +106,9 @@ public class PojlibInstance
         instance.mainClass = raw.Get<string>("mainClass");
         instance.extraNatives = raw.Get<string>("extraNatives");
         instance.defaultMods = raw.Get<bool>("defaultMods");
+        // H6: renderer may be null on instances created before the field
+        // existed; GetRenderer() maps that to the Vulkan default.
+        instance.renderer = raw.Get<string>("renderer");
         return instance;
     }
 

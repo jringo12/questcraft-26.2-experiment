@@ -300,9 +300,22 @@ public class JREUtils {
         userArgs.add(0,"java"); //argv[0] is the program name according to C standard.
 
         final String[] launchArgs = userArgs.toArray(new String[0]);
+        // H6: the backend this launch actually uses (same value
+        // generateLaunchArgs baked into the args). If the JVM dies during
+        // initialisation, the next launch falls back to the other backend.
+        final String usedBackend = RendererFallback.getEffectiveRenderer(instance);
+        final long launchStartMs = System.currentTimeMillis();
         Thread jvmThread = new Thread(() -> {
             int exitCode = VMLauncher.launchJVM(launchArgs);
             Logger.getInstance().appendToLog("Java Exit code: " + exitCode);
+            // H6 fallback: a non-zero exit BEFORE the game ever became ready,
+            // shortly after launch, means the backend failed to initialise
+            // (not a mid-game crash). Record it so the next launch of this
+            // instance tries the other backend instead of hard-failing again.
+            if (exitCode != 0 && !API.gameReady
+                    && System.currentTimeMillis() - launchStartMs < 180_000L) {
+                RendererFallback.recordInitFailure(instance, usedBackend);
+            }
         }, "QuestCraft-JVM");
         jvmThread.start();
         return 0;

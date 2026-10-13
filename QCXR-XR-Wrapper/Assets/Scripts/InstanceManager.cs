@@ -29,6 +29,12 @@ public class InstanceManager : MonoBehaviour
     [SerializeField] private GameObject modPrefab;
     [SerializeField] private GameObject modArray;
     [SerializeField] private APIHandler apiHandler;
+    // H6: per-instance renderer control, built once and reused. It is a plain
+    // Button + TextMeshProUGUI created in code (no scene YAML surgery) and
+    // parented under the info panel next to Update/Delete.
+    private GameObject rendererButton;
+    private TextMeshProUGUI rendererButtonLabel;
+    private PojlibInstance currentInfoInstance;
     
     public void Start()
     {
@@ -133,6 +139,11 @@ public class InstanceManager : MonoBehaviour
         instanceVersion.text = instance.versionName + " - Fabric";
         instanceTitle.text = instance.instanceName;
 
+        // H6: remember which instance this page is showing, and (re)build the
+        // per-instance renderer control for it.
+        currentInfoInstance = instance;
+        SetupRendererButton();
+
         if (instance.instanceImageURL != null)
             apiHandler.DownloadImage(instance.instanceImageURL, instanceImage);
 
@@ -226,6 +237,101 @@ public class InstanceManager : MonoBehaviour
                 apiHandler.DownloadImage(mod.icon_url, modObject.GetComponentInChildren<RawImage>());
             }
         }
+    }
+
+    // H6: per-instance renderer control. A tap cycles Vulkan <-> OpenGL and
+    // persists the choice via pojlib (instances.json). The button is created
+    // once and reused across info-page opens; it lives under the info panel
+    // so it hides with the panel. Label shows the live value.
+    private void SetupRendererButton()
+    {
+        if (currentInfoInstance == null || instanceTitle == null)
+            return;
+
+        if (rendererButton == null)
+        {
+            Transform parent = instanceTitle.transform.parent;
+            if (parent == null)
+                return;
+
+            rendererButton = new GameObject("RendererButton");
+            RectTransform rt = rendererButton.AddComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            // Match Update/Delete buttons: centred anchors, top-left pivot,
+            // same size, stacked just below Delete.
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(436.4f, -202.6f);
+            rt.sizeDelta = new Vector2(213.2f, 40f);
+
+            Image bg = rendererButton.AddComponent<Image>();
+            // Borrow the Delete button's sprite so the control matches the
+            // panel's style; fall back to a plain white image.
+            Transform deleteButton = parent.Find("DeleteButton");
+            Sprite buttonSprite = deleteButton != null ? deleteButton.GetComponent<Image>()?.sprite : null;
+            bg.sprite = buttonSprite;
+            bg.color = Color.white;
+
+            Button button = rendererButton.AddComponent<Button>();
+            button.targetGraphic = bg;
+            button.onClick.AddListener(OnRendererButtonClicked);
+
+            GameObject labelObj = new GameObject("Text (TMP)");
+            RectTransform labelRt = labelObj.AddComponent<RectTransform>();
+            labelRt.SetParent(rendererButton.transform, false);
+            labelRt.anchorMin = Vector2.zero;
+            labelRt.anchorMax = Vector2.one;
+            labelRt.offsetMin = Vector2.zero;
+            labelRt.offsetMax = Vector2.zero;
+
+            rendererButtonLabel = labelObj.AddComponent<TextMeshProUGUI>();
+            // Match the Delete button's label styling.
+            TextMeshProUGUI deleteLabel = deleteButton != null
+                ? deleteButton.Find("Text (TMP)")?.GetComponent<TextMeshProUGUI>()
+                : null;
+            if (deleteLabel != null)
+            {
+                rendererButtonLabel.font = deleteLabel.font;
+                rendererButtonLabel.fontSize = deleteLabel.fontSize;
+                rendererButtonLabel.color = deleteLabel.color;
+                rendererButtonLabel.alignment = deleteLabel.alignment;
+            }
+            else
+            {
+                rendererButtonLabel.fontSize = 24;
+                rendererButtonLabel.color = Color.black;
+                rendererButtonLabel.alignment = TextAlignmentOptions.Center;
+            }
+        }
+
+        RefreshRendererButtonLabel();
+    }
+
+    private void RefreshRendererButtonLabel()
+    {
+        if (rendererButtonLabel != null && currentInfoInstance != null)
+        {
+            string name = currentInfoInstance.GetRenderer() == "opengl" ? "OpenGL" : "Vulkan";
+            rendererButtonLabel.text = "Renderer: " + name + " (tap to change)";
+        }
+    }
+
+    private void OnRendererButtonClicked()
+    {
+        if (currentInfoInstance == null)
+            return;
+
+        string next = currentInfoInstance.GetRenderer() == "opengl" ? "vulkan" : "opengl";
+        bool saved = JNIStorage.apiClass.CallStatic<bool>("setInstanceRenderer", JNIStorage.instancesObj, currentInfoInstance.raw, next);
+        if (!saved)
+        {
+            JNIStorage.instance.uiHandler.SetAndShowError("Failed to save renderer choice.");
+            return;
+        }
+
+        currentInfoInstance.renderer = next;
+        RefreshRendererButtonLabel();
     }
 
     string ColorToHex(Color color)

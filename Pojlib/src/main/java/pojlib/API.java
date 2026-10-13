@@ -128,6 +128,22 @@ public class API {
         return InstanceHandler.removeExtraProject(instances, instance, name);
     }
 
+    /**
+     * H6: persist a per-instance renderer choice ("vulkan" / "opengl").
+     * The choice is saved to instances.json and honoured at launch via
+     * {@code MinecraftInstances.Instance#generateLaunchArgs}. An explicit
+     * choice clears any pending renderer-fallback marker.
+     *
+     * @param instances Acquired from {@link API#loadAll()}
+     * @param instance  Acquired from {@link API#createNewInstance(Activity, MinecraftInstances, String, boolean, String, String, String)}
+     *                  or {@link API#load(MinecraftInstances, String)}
+     * @param renderer  "vulkan" or "opengl"
+     * @return True if the renderer was saved
+     */
+    public static boolean setInstanceRenderer(MinecraftInstances instances, MinecraftInstances.Instance instance, String renderer) {
+        return InstanceHandler.setRenderer(instances, instance, renderer);
+    }
+
     public static String[] getQCSupportedVersions(Activity ctx) {
         return APIHandler.getQCSupportedVersions(ctx);
     }

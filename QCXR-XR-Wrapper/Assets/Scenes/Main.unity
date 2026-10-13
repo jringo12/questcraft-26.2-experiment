@@ -29467,6 +29467,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1283467987}
+  - component: {fileID: 1987654321}
   m_Layer: 0
   m_Name: MainMenu
   m_TagString: Untagged
@@ -35755,7 +35756,6 @@ GameObject:
   - component: {fileID: 1588127163}
   - component: {fileID: 1588127162}
   - component: {fileID: 1588127161}
-  - component: {fileID: 1588127160}
   m_Layer: 5
   m_Name: ContinueButton
   m_TagString: Untagged
@@ -35783,25 +35783,7 @@ RectTransform:
   m_AnchoredPosition: {x: 594, y: -214.09998}
   m_SizeDelta: {x: 201.2, y: 55}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &1588127160
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1588127158}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ea87d112f0ba8ad439f17cb8309ff273, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  accountDropdown: {fileID: 0}
-  loginText: {fileID: 0}
-  handler: {fileID: 1460469781}
-  UIHandler: {fileID: 0}
-  isDemoMode: 0
-  selectedAccountUsername: 
-  skinHandler: {fileID: 0}
+
 --- !u!114 &1588127161
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -35848,7 +35830,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1460469781}
         m_TargetAssemblyTypeName: WindowHandler, Assembly-CSharp
-        m_MethodName: LegalSetter
+        m_MethodName: LegalUnsetter
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -53203,3 +53185,15 @@ SceneRoots:
   - {fileID: 1748472357}
   - {fileID: 2040011916}
   - {fileID: 1383936996}
+--- !u!114 &1987654321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1283467986}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ddca4c47ac0419095f26a4ebe3a6f8d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

@@ -156,9 +156,19 @@ public class WindowHandler : MonoBehaviour
         needHelpPanel.SetActive(!needHelpPanel.activeSelf);
     }
 
+    // H4 FIX: LegalSetter is an explicit SHOW, not a toggle. It used to flip
+    // the panel, so the Continue button (which also calls AgreeToLegal)
+    // could re-show the panel it was meant to dismiss, and any second call
+    // hid a panel that should stay visible. Callers that dismiss the panel
+    // must use LegalUnsetter() instead.
     public void LegalSetter()
     {
-        legalPanel.SetActive(!legalPanel.activeSelf);
+        legalPanel.SetActive(true);
+    }
+
+    public void LegalUnsetter()
+    {
+        legalPanel.SetActive(false);
     }
     
     public void OpenDiscord()
