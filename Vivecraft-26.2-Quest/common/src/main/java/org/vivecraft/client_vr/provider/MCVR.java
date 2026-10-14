@@ -14,7 +14,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.TorchBlock;
 import org.apache.commons.lang3.tuple.Triple;
 import org.joml.*;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
+import org.lwjgl.sdl.SDLScancode;
 import org.vivecraft.api.client.data.CloseKeyboardContext;
 import org.vivecraft.api.client.data.RenderPass;
 import org.vivecraft.api.data.VRBodyPart;
@@ -26,7 +27,7 @@ import org.vivecraft.client_vr.ClientDataHolderVR;
 import org.vivecraft.client_vr.QuaternionfHistory;
 import org.vivecraft.client_vr.VRData;
 import org.vivecraft.client_vr.Vector3fHistory;
-import org.vivecraft.client_vr.extensions.GuiExtension;
+import org.vivecraft.client_vr.extensions.HudExtension;
 import org.vivecraft.client_vr.extensions.WindowExtension;
 import org.vivecraft.client_vr.gameplay.screenhandlers.GuiHandler;
 import org.vivecraft.client_vr.gameplay.screenhandlers.KeyboardHandler;
@@ -41,6 +42,7 @@ import org.vivecraft.client_vr.utils.osc_trackers.OSCTracker;
 import org.vivecraft.client_vr.utils.osc_trackers.OSCTrackerReceiver;
 import org.vivecraft.common.utils.MathUtils;
 import org.vivecraft.data.ViveItems;
+import org.vivecraft.mixin.client.MinecraftAccessor;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -675,17 +677,14 @@ public abstract class MCVR {
 
                 this.aimPitch = Mth.clamp(this.aimPitch + vPos * ySpeed, -89.9F, 89.9F);
 
-                double screenX = xPos *
-                    (((WindowExtension) (Object) this.mc.getWindow()).vivecraft$getActualScreenWidth() /
-                        (double) screenWidth
-                    );
+                Vector2ic windowSize = ((WindowExtension) (Object) this.mc.getWindow()).vivecraft$getActualWindowSize();
+
+                double screenX = xPos * (windowSize.x() / (double) screenWidth);
                 double screenY = (screenHeight * 0.5F) *
-                    (((WindowExtension) (Object) this.mc.getWindow()).vivecraft$getActualScreenHeight() /
-                        (double) this.mc.getWindow().getScreenHeight()
-                    );
+                    (windowSize.y() / (double) this.mc.getWindow().getScreenHeight());
 
                 InputSimulator.setMousePos(screenX, screenY);
-                GLFW.glfwSetCursorPos(this.mc.getWindow().handle(), screenX, screenY);
+                SDLMouse.SDL_WarpMouseInWindow(this.mc.getWindow().handle(), (float) screenX, (float) screenY);
 
                 if (this.dh.vrSettings.aimDevice == VRSettings.AimDevice.CONTROLLER) {
                     temp.rotationY(Mth.DEG_TO_RAD * (-180.0F - hPos - this.hmdForwardYaw));
@@ -919,7 +918,7 @@ public abstract class MCVR {
                 if (itemstack.getItem() instanceof BlockItem item && item.getBlock() instanceof TorchBlock) {
                     this.quickTorchPreviousSlot = this.mc.player.getInventory().getSelectedSlot();
                     this.mc.player.getInventory().setSelectedSlot(slot);
-                    this.mc.startUseItem();
+                    ((MinecraftAccessor) this.mc).invokeStartUseItem();
                     // switch back immediately
                     this.mc.player.getInventory().setSelectedSlot(this.quickTorchPreviousSlot);
                     this.quickTorchPreviousSlot = -1;
@@ -1005,8 +1004,8 @@ public abstract class MCVR {
         if (MOD.keyMenuButton.consumeClick()) {
             // handle menu directly
             if (gui || !this.dh.kiosk) {
-                InputSimulator.pressKey(GLFW.GLFW_KEY_ESCAPE);
-                InputSimulator.releaseKey(GLFW.GLFW_KEY_ESCAPE);
+                InputSimulator.pressKey(SDLScancode.SDL_SCANCODE_ESCAPE);
+                InputSimulator.releaseKey(SDLScancode.SDL_SCANCODE_ESCAPE);
             }
 
             KeyboardHandler.hideOverlay(CloseKeyboardContext.FORCE);
@@ -1014,8 +1013,8 @@ public abstract class MCVR {
 
         // player list
         if (MOD.keyTogglePlayerList.consumeClick()) {
-            ((GuiExtension) this.mc.gui).vivecraft$setShowPlayerList(
-                !((GuiExtension) this.mc.gui).vivecraft$getShowPlayerList());
+            ((HudExtension) this.mc.gui.hud).vivecraft$setShowPlayerList(
+                !((HudExtension) this.mc.gui.hud).vivecraft$getShowPlayerList());
         }
 
         // screenshot cam
@@ -1293,13 +1292,13 @@ public abstract class MCVR {
     /**
      * handles any keyboard inputs that are specific to this MCVR implementation
      *
-     * @param key       GLFW key that is handled
-     * @param scanCode  scanCode of the handled key
+     * @param key       SDL scancode that is handled
+     * @param keyCode   SDL KeyCode of the handled key
      * @param action    if the key was pressed, released or repeated
      * @param modifiers key modifiers that are active
      * @return true if a key was handled
      */
-    public boolean handleKeyboardInputs(int key, int scanCode, int action, int modifiers) {
+    public boolean handleKeyboardInputs(int key, int keyCode, int action, int modifiers) {
         return false;
     }
 

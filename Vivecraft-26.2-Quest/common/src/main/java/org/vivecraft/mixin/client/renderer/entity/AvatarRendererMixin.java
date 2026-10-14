@@ -115,12 +115,9 @@ public abstract class AvatarRendererMixin extends LivingEntityRendererMixin<Abst
         }
 
         HumanoidArm attackArm = null;
-        if (renderState.attackTime > 0F) {
+        if (renderState.swingAnimation > 0F && renderState.currentSwing != null) {
             // we ignore the vanilla main arm setting
-            attackArm = renderState.attackArm;
-            if (rotInfo.leftHanded) {
-                attackArm = attackArm.getOpposite();
-            }
+            attackArm = renderState.currentSwing.hand().asArm(renderState.mainArm);
         }
 
         return new VRPlayerRenderData(isMainPlayer,

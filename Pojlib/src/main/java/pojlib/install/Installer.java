@@ -40,10 +40,17 @@ public class Installer {
     private static final String JAVA_25_ASSET = "runtimes/JRE-25.zip";
     private static final String JAVA_MAJOR_MARKER = ".questcraft-java-major";
     private static final String OSHI_ANDROID_SHIM = Constants.USER_HOME + "/hacks/OshiAndroidShim.jar";
-    private static final String FABRIC_LOADER_26_2 = "0.19.3";
-    private static final String FABRIC_LOADER_26_2_JAR = Constants.USER_HOME +
-        "/libraries/net/fabricmc/fabric-loader/" + FABRIC_LOADER_26_2 +
-        "/fabric-loader-" + FABRIC_LOADER_26_2 + ".jar";
+    private static final String PINNED_FABRIC_LOADER = "0.19.3";
+    private static final String PINNED_FABRIC_LOADER_JAR = Constants.USER_HOME +
+        "/libraries/net/fabricmc/fabric-loader/" + PINNED_FABRIC_LOADER +
+        "/fabric-loader-" + PINNED_FABRIC_LOADER + ".jar";
+
+    // MC versions whose launch assets are refreshed on every launch
+    // (bundled Sodium/options re-copied, pinned loader forced first on the
+    // classpath). 26.2 and 26.3 share this path.
+    private static boolean needsLaunchCompatibilityRefresh(String versionName) {
+        return "26.2".equals(versionName) || "26.3".equals(versionName);
+    }
 
     public static void installJVM(Activity activity, boolean force) {
         installJVM(activity, force, DEFAULT_JAVA_MAJOR);
@@ -268,7 +275,7 @@ public class Installer {
     }
 
     public static void refreshLaunchCompatibilityAssets(Activity activity, MinecraftInstances.Instance instance) {
-        if(!"26.2".equals(instance.versionName)) {
+        if(!needsLaunchCompatibilityRefresh(instance.versionName)) {
             return;
         }
 
@@ -285,13 +292,13 @@ public class Installer {
     }
 
     private static void refreshFabricLoaderForCurrentLaunch(Activity activity, MinecraftInstances.Instance instance) {
-        File installedLoader = new File(FABRIC_LOADER_26_2_JAR);
+        File installedLoader = new File(PINNED_FABRIC_LOADER_JAR);
         if(installedLoader.isFile()) {
             ensureClasspathEntryFirst(instance, installedLoader.getAbsolutePath());
         }
 
         try {
-            FabricMeta.FabricVersion fabricVersion = FabricMeta.getVersion(FABRIC_LOADER_26_2);
+            FabricMeta.FabricVersion fabricVersion = FabricMeta.getVersion(PINNED_FABRIC_LOADER);
             if(fabricVersion == null) {
                 return;
             }

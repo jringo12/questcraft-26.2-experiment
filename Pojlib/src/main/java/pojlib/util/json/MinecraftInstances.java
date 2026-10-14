@@ -107,10 +107,11 @@ public class MinecraftInstances {
             allArgs.add(classpath);
             allArgs.add(mainClass);
             allArgs.addAll(Arrays.asList(mcArgs));
-            if ("26.2".equals(versionName)) {
+            if ("26.2".equals(versionName) || "26.3".equals(versionName)) {
                 // H6: honour the per-instance renderer choice instead of
                 // hard-coding Vulkan. RendererFallback may substitute the
                 // other backend if the chosen one just failed to initialise.
+                // 26.2 and 26.3 both accept --graphicsBackend.
                 allArgs.add("--graphicsBackend");
                 allArgs.add(RendererFallback.getEffectiveRenderer(this));
             }

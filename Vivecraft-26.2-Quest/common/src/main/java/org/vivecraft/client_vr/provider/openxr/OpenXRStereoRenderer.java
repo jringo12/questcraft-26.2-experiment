@@ -1,6 +1,6 @@
 package org.vivecraft.client_vr.provider.openxr;
 
-import com.mojang.blaze3d.GpuFormat;
+import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.network.chat.Component;
 import org.joml.Matrix4f;

@@ -2,6 +2,7 @@ package org.vivecraft.client_vr.gameplay.trackers;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.sounds.SoundEvents;
@@ -44,6 +45,7 @@ import org.vivecraft.client_vr.provider.ControllerType;
 import org.vivecraft.client_vr.provider.MCVR;
 import org.vivecraft.client_vr.render.helpers.DebugRenderHelper;
 import org.vivecraft.client_vr.settings.VRSettings;
+import org.vivecraft.common.network.packet.c2s.RoomscaleAttackPayloadC2S;
 import org.vivecraft.common.utils.MathUtils;
 import org.vivecraft.common.utils.Utils;
 import org.vivecraft.data.ViveBlockTags;
@@ -84,6 +86,10 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
     private final Vec3[] lastBlockHit = new Vec3[4];
     private final int[] lastMiningPointHit = new int[4];
     private final List<Pair<Vec3, Integer>>[] previousMiningPoints = new List[]{new LinkedList<>(), new LinkedList<>(), new LinkedList<>(), new LinkedList<>()};
+
+    // on vanilla servers, we block the particles for roomscale hits
+    private BlockPos lastHitEffectPos = null;
+    private Direction lastHitEffectDirection = null;
 
     private final Minecraft mc;
     private final ClientDataHolderVR dh;
@@ -140,10 +146,7 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
     }
 
     private static boolean isToolItem(Item item) {
-        return item instanceof ShovelItem ||
-            item instanceof HoeItem ||
-            item instanceof AxeItem ||
-            item instanceof ArrowItem ||
+        return item instanceof ArrowItem ||
             item instanceof FishingRodItem ||
             item instanceof FoodOnAStickItem ||
             item instanceof ShearsItem ||
@@ -172,6 +175,9 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
             this.miningPoints[i] = null;
             this.useHoldTicks[i] = 0;
         }
+        if (hasHit()) {
+            this.resetLastHit();
+        }
     }
 
     @Override
@@ -181,6 +187,14 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
 
     @Override
     public void activeProcess(LocalPlayer player) {
+        // if the player moved further than the interaction range away, plus 2 blocks margin, reset it
+        if (hasHit()) {
+            double dist = this.lastHitEffectPos.distToCenterSqr(player.position());
+            double interact = player.blockInteractionRange() + 2;
+            if (dist > interact * interact) {
+                this.resetLastHit();
+            }
+        }
         float speedTreshhold = SPEED_THRESH;
 
         if (player.isCreative()) {
@@ -395,7 +409,7 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                         MathUtils.subtractToVector3f(averageTargetPosition.scale(1F / targetCount), handPos)
                             .normalize() :
                         deviceDirection.rotateY(this.dh.vrPlayer.vrdata_world_pre.rotation_radians, new Vector3f()));
-                    this.mc.gameMode.piercingAttack(piercingWeapon);
+                    this.mc.gameMode.piercingAttack(itemstack.getAttackAnimation(), piercingWeapon);
                     ClientNetworking.resetAim(0);
                     continue;
                 }
@@ -523,7 +537,7 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                         // the useItem is already in the if check, so nothing to do here
                     }
                     // roomscale hoe interaction
-                    else if (isHand && (item instanceof HoeItem || itemstack.is(ViveItemTags.VIVECRAFT_HOES) ||
+                    else if (isHand && (itemstack.is(ItemTags.HOES) || itemstack.is(ViveItemTags.VIVECRAFT_HOES) ||
                         itemstack.is(ViveItemTags.VIVECRAFT_SCYTHES)
                     ) && (blockstate.getBlock() instanceof CropBlock ||
                         blockstate.getBlock() instanceof StemBlock ||
@@ -533,7 +547,7 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                         (item.useOn(new UseOnContext(player,
                             c == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND,
                             blockHit)) instanceof InteractionResult.Success success &&
-                            success.swingSource() == InteractionResult.SwingSource.CLIENT
+                            success.swingSource() == InteractionResult.SwingSource.PREDICTED
                         )
                     ))
                     {
@@ -542,7 +556,7 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                         boolean useSuccessful = this.mc.gameMode.useItemOn(player,
                             i == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND,
                             blockHit) instanceof InteractionResult.Success success &&
-                            success.swingSource() == InteractionResult.SwingSource.CLIENT;
+                            success.swingSource() == InteractionResult.SwingSource.PREDICTED;
                         if (itemstack.is(ViveItemTags.VIVECRAFT_SCYTHES) && !useSuccessful) {
                             // some scythes just need to be used
                             this.mc.gameMode.useItem(player,
@@ -595,6 +609,14 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                         // send hitting hand
                         ClientNetworking.sendActiveBodyPart(BODYPARTS[i], true);
 
+                        // send that this is a roomscale hit
+                        if (ClientNetworking.SERVER_SUPPORTS_ROOMSCALE_ATTACK_PACKET) {
+                            ClientNetworking.sendServerPacket(new RoomscaleAttackPayloadC2S(true, 0));
+                        }
+
+                        // if we are already destroying startDestroyBlock doesn't play the hit sound
+                        boolean playSound = this.mc.gameMode.isDestroying();
+
                         // this will either destroy the block if in creative or set it as the current block.
                         // does nothing in survival if you are already hitting this block.
                         this.mc.gameMode.startDestroyBlock(blockHit.getBlockPos(), blockHit.getDirection());
@@ -606,8 +628,15 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
                                 if (this.mc.gameMode.continueDestroyBlock(blockHit.getBlockPos(),
                                     blockHit.getDirection()))
                                 {
-                                    this.mc.level.addBreakingBlockEffect(blockHit.getBlockPos(),
-                                        blockHit.getDirection());
+                                    // only do clientside effects if the server doesn't send roomscale hit updates
+                                    if (!ClientNetworking.SERVER_SUPPORTS_ROOMSCALE_ATTACK_PACKET) {
+                                        this.mc.level.addBreakingBlockEffects(blockHit.getBlockPos(),
+                                            blockHit.getDirection(), playSound);
+                                    }
+                                    this.lastHitEffectPos = blockHit.getBlockPos();
+                                    this.lastHitEffectDirection = blockHit.getDirection();
+                                    // only play sound the first time
+                                    playSound = false;
                                 }
 
                                 this.clearBlockHitDelay();
@@ -623,6 +652,10 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
 
                         this.dh.vrPlayer.blockDust(blockHit.getLocation().x, blockHit.getLocation().y,
                             blockHit.getLocation().z, 3 * totalHits, blockHit.getBlockPos(), blockstate, 0.6F, 1.0F);
+                        // reset roomscale hit
+                        if (ClientNetworking.SERVER_SUPPORTS_ROOMSCALE_ATTACK_PACKET) {
+                            ClientNetworking.sendServerPacket(new RoomscaleAttackPayloadC2S(false, totalHits));
+                        }
                     }
 
                     this.dh.vr.triggerHapticPulse(c, 250 * totalHits);
@@ -701,6 +734,35 @@ public class SwingTracker implements ItemInUseTracker, DebugRenderTracker {
             return !open && direction.getAxis() == facing.getAxis();
         }
         return false;
+    }
+
+    /**
+     * @return if there was a roomscale hit
+     */
+    public boolean hasHit() {
+        return this.lastHitEffectPos != null && this.lastHitEffectDirection != null;
+    }
+
+    /**
+     * Checks if the given block position and direction match the last roomscale block hit
+     *
+     * @param pos       block position ot check at
+     * @param direction direction to check
+     * @return if the give block+direction match the roomscale hit
+     */
+    public boolean matchesLastHit(BlockPos pos, Direction direction) {
+        return Objects.equals(this.lastHitEffectPos, pos) && this.lastHitEffectDirection == direction;
+    }
+
+    /**
+     * resets the stored roomscale hit
+     */
+    public void resetLastHit() {
+        if (this.mc.gameMode != null) {
+            this.mc.gameMode.stopDestroyBlock();
+        }
+        this.lastHitEffectPos = null;
+        this.lastHitEffectDirection = null;
     }
 
     /**

@@ -44,7 +44,15 @@ import pojlib.util.json.ModrinthIndexJson;
 public class InstanceHandler {
     public static final String MODS = "https://raw.githubusercontent.com/QuestCraftPlusPlus/Pojlib/refs/heads/" + Constants.GIT_BRANCH + "/mods.json";
     public static final String DEV_MODS = "https://raw.githubusercontent.com/QuestCraftPlusPlus/Pojlib/refs/heads/" + Constants.GIT_BRANCH + "/devmods.json";
-    private static final String FABRIC_LOADER_26_2 = "0.19.3";
+    // Fabric loader pinned for the 26.x line: newer loaders are not
+    // verified against QuestCraft's launch path, so 26.2 and 26.3 both
+    // use this exact loader instead of getLatestVersion().
+    private static final String PINNED_FABRIC_LOADER = "0.19.3";
+
+    // MC versions that use the pinned Fabric loader above.
+    private static boolean usesPinnedFabricLoader(String minecraftVersion) {
+        return "26.2".equals(minecraftVersion) || "26.3".equals(minecraftVersion);
+    }
 
     public static MinecraftInstances.Instance create(Activity activity, MinecraftInstances instances, String instanceName, String userHome, String modLoader, String mrpackFilePath, String imageURL) {
         File mrpackJson = new File(Constants.USER_HOME + "/instances/" + instanceName.toLowerCase(Locale.ROOT).replaceAll(" ", "_") + "/setup/modrinth.index.json");
@@ -145,8 +153,8 @@ public class InstanceHandler {
         VersionInfo modLoaderVersionInfo = null;
         switch (modLoader) {
             case "Fabric": {
-                FabricMeta.FabricVersion fabricVersion = "26.2".equals(minecraftVersion)
-                        ? FabricMeta.getVersion(FABRIC_LOADER_26_2)
+                FabricMeta.FabricVersion fabricVersion = usesPinnedFabricLoader(minecraftVersion)
+                        ? FabricMeta.getVersion(PINNED_FABRIC_LOADER)
                         : FabricMeta.getLatestVersion();
                 assert fabricVersion != null;
                 modLoaderVersionInfo = FabricMeta.getVersionInfo(fabricVersion, minecraftVersion);

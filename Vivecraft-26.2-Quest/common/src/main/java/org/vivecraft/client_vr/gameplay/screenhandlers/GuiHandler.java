@@ -18,11 +18,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
-import org.joml.Vector2f;
-import org.joml.Vector2fc;
-import org.joml.Vector3f;
-import org.lwjgl.glfw.GLFW;
+import org.joml.*;
+import org.lwjgl.sdl.SDLMouse;
+import org.lwjgl.sdl.SDLScancode;
 import org.vivecraft.api.client.data.CloseKeyboardContext;
 import org.vivecraft.client.VivecraftVRMod;
 import org.vivecraft.client_vr.ClientDataHolderVR;
@@ -41,6 +39,8 @@ import org.vivecraft.client_vr.settings.AutoCalibration;
 import org.vivecraft.client_vr.settings.VRSettings;
 import org.vivecraft.common.utils.MathUtils;
 
+import java.lang.Math;
+
 public class GuiHandler {
     public static final Minecraft MC = Minecraft.getInstance();
     public static final ClientDataHolderVR DH = ClientDataHolderVR.getInstance();
@@ -57,26 +57,26 @@ public class GuiHandler {
     private static boolean LAST_PRESSED_CRTL;
     private static boolean LAST_PRESSED_ALT;
 
-    public static final KeyMapping KEY_LEFT_CLICK = new KeyMapping("vivecraft.key.guiLeftClick", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_RIGHT_CLICK = new KeyMapping("vivecraft.key.guiRightClick", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_MIDDLE_CLICK = new KeyMapping("vivecraft.key.guiMiddleClick", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_SHIFT = new KeyMapping("vivecraft.key.guiShift", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_CTRL = new KeyMapping("vivecraft.key.guiCtrl", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_ALT = new KeyMapping("vivecraft.key.guiAlt", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_SCROLL_UP = new KeyMapping("vivecraft.key.guiScrollUp", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_SCROLL_DOWN = new KeyMapping("vivecraft.key.guiScrollDown", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final KeyMapping KEY_SCROLL_AXIS = new KeyMapping("vivecraft.key.guiScrollAxis", -1,
-        VivecraftVRMod.INSTANCE.categoryGui);
-    public static final HandedKeyBinding KEY_KEYBOARD_CLICK = new HandedKeyBinding("vivecraft.key.keyboardClick", -1,
-        VivecraftVRMod.INSTANCE.categoryKeyboard)
+    public static final KeyMapping KEY_LEFT_CLICK = new KeyMapping("vivecraft.key.guiLeftClick",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_RIGHT_CLICK = new KeyMapping("vivecraft.key.guiRightClick",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_MIDDLE_CLICK = new KeyMapping("vivecraft.key.guiMiddleClick",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_SHIFT = new KeyMapping("vivecraft.key.guiShift",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_CTRL = new KeyMapping("vivecraft.key.guiCtrl",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_ALT = new KeyMapping("vivecraft.key.guiAlt",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_SCROLL_UP = new KeyMapping("vivecraft.key.guiScrollUp",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_SCROLL_DOWN = new KeyMapping("vivecraft.key.guiScrollDown",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final KeyMapping KEY_SCROLL_AXIS = new KeyMapping("vivecraft.key.guiScrollAxis",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryGui);
+    public static final HandedKeyBinding KEY_KEYBOARD_CLICK = new HandedKeyBinding("vivecraft.key.keyboardClick",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryKeyboard)
     {
         @Override
         public boolean isPriorityOnController(ControllerType type) {
@@ -87,8 +87,8 @@ public class GuiHandler {
             }
         }
     };
-    public static final HandedKeyBinding KEY_KEYBOARD_SHIFT = new HandedKeyBinding("vivecraft.key.keyboardShift", -1,
-        VivecraftVRMod.INSTANCE.categoryKeyboard)
+    public static final HandedKeyBinding KEY_KEYBOARD_SHIFT = new HandedKeyBinding("vivecraft.key.keyboardShift",
+        SDLScancode.SDL_SCANCODE_UNKNOWN, VivecraftVRMod.INSTANCE.categoryKeyboard)
     {
         @Override
         public boolean isPriorityOnController(ControllerType type) {
@@ -188,11 +188,10 @@ public class GuiHandler {
         }
         if (oldWidth != GUI_WIDTH) {
             // move cursor to right position
+            Vector2ic windowSize = ((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualWindowSize();
             InputSimulator.setMousePos(
-                MC.mouseHandler.xpos() * ((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualScreenWidth() /
-                    oldWidth,
-                MC.mouseHandler.ypos() * ((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualScreenHeight() /
-                    oldHeight);
+                MC.mouseHandler.xpos() * windowSize.x() / oldWidth,
+                MC.mouseHandler.ypos() * windowSize.y() / oldHeight);
             CONTROLLER_MOUSE_X *= (double) GUI_WIDTH / oldWidth;
             CONTROLLER_MOUSE_Y *= (double) GUI_HEIGHT / oldHeight;
             return true;
@@ -236,13 +235,10 @@ public class GuiHandler {
 
         if (CONTROLLER_MOUSE_VALID) {
             // mouse on screen
+            Vector2ic windowSize = ((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualWindowSize();
             InputSimulator.setMousePos(
-                CONTROLLER_MOUSE_X * (((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualScreenWidth() /
-                    (double) MC.getWindow().getScreenWidth()
-                ),
-                CONTROLLER_MOUSE_Y * (((WindowExtension) (Object) MC.getWindow()).vivecraft$getActualScreenHeight() /
-                    (double) MC.getWindow().getScreenHeight()
-                ));
+                CONTROLLER_MOUSE_X * (windowSize.x() / (double) MC.getWindow().getScreenWidth()),
+                CONTROLLER_MOUSE_Y * (windowSize.y() / (double) MC.getWindow().getScreenHeight()));
         }
     }
 
@@ -307,61 +303,61 @@ public class GuiHandler {
 
         // LMB
         if (KEY_LEFT_CLICK.consumeClick() && MC.gui.screen() != null && mouseValid) {
-            InputSimulator.pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            InputSimulator.pressMouse(SDLMouse.SDL_BUTTON_LEFT);
             LAST_PRESSED_LEFT_CLICK = true;
         }
         if (!KEY_LEFT_CLICK.isDown() && LAST_PRESSED_LEFT_CLICK) {
-            InputSimulator.releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            InputSimulator.releaseMouse(SDLMouse.SDL_BUTTON_LEFT);
             LAST_PRESSED_LEFT_CLICK = false;
         }
 
         // RMB
         if (KEY_RIGHT_CLICK.consumeClick() && MC.gui.screen() != null && mouseValid) {
-            InputSimulator.pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            InputSimulator.pressMouse(SDLMouse.SDL_BUTTON_RIGHT);
             LAST_PRESSED_RIGHT_CLICK = true;
         }
         if (!KEY_RIGHT_CLICK.isDown() && LAST_PRESSED_RIGHT_CLICK) {
-            InputSimulator.releaseMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            InputSimulator.releaseMouse(SDLMouse.SDL_BUTTON_RIGHT);
             LAST_PRESSED_RIGHT_CLICK = false;
         }
 
         // MMB
         if (KEY_MIDDLE_CLICK.consumeClick() && MC.gui.screen() != null && mouseValid) {
-            InputSimulator.pressMouse(GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
+            InputSimulator.pressMouse(SDLMouse.SDL_BUTTON_MIDDLE);
             LAST_PRESSED_MIDDLE_CLICK = true;
         }
         if (!KEY_MIDDLE_CLICK.isDown() && LAST_PRESSED_MIDDLE_CLICK) {
-            InputSimulator.releaseMouse(GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
+            InputSimulator.releaseMouse(SDLMouse.SDL_BUTTON_MIDDLE);
             LAST_PRESSED_MIDDLE_CLICK = false;
         }
 
         // Shift
         if (KEY_SHIFT.consumeClick() && MC.gui.screen() != null) {
-            InputSimulator.pressKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            InputSimulator.pressKey(SDLScancode.SDL_SCANCODE_LSHIFT);
             LAST_PRESSED_SHIFT = true;
         }
         if (!KEY_SHIFT.isDown() && LAST_PRESSED_SHIFT) {
-            InputSimulator.releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            InputSimulator.releaseKey(SDLScancode.SDL_SCANCODE_LSHIFT);
             LAST_PRESSED_SHIFT = false;
         }
 
         // Crtl
         if (KEY_CTRL.consumeClick() && MC.gui.screen() != null) {
-            InputSimulator.pressKey(GLFW.GLFW_KEY_LEFT_CONTROL);
+            InputSimulator.pressKey(SDLScancode.SDL_SCANCODE_LCTRL);
             LAST_PRESSED_CRTL = true;
         }
         if (!KEY_CTRL.isDown() && LAST_PRESSED_CRTL) {
-            InputSimulator.releaseKey(GLFW.GLFW_KEY_LEFT_CONTROL);
+            InputSimulator.releaseKey(SDLScancode.SDL_SCANCODE_LCTRL);
             LAST_PRESSED_CRTL = false;
         }
 
         // Alt
         if (KEY_ALT.consumeClick() && MC.gui.screen() != null) {
-            InputSimulator.pressKey(GLFW.GLFW_KEY_LEFT_ALT);
+            InputSimulator.pressKey(SDLScancode.SDL_SCANCODE_LALT);
             LAST_PRESSED_ALT = true;
         }
         if (!KEY_ALT.isDown() && LAST_PRESSED_ALT) {
-            InputSimulator.releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+            InputSimulator.releaseKey(SDLScancode.SDL_SCANCODE_LALT);
             LAST_PRESSED_ALT = false;
         }
 

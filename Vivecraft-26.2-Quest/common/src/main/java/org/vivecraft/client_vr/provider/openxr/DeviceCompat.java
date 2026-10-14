@@ -2,16 +2,14 @@ package org.vivecraft.client_vr.provider.openxr;
 
 import com.mojang.blaze3d.platform.Window;
 import com.sun.jna.Platform;
+import com.sun.jna.Pointer;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFWNativeGLX;
-import org.lwjgl.glfw.GLFWNativeWGL;
-import org.lwjgl.glfw.GLFWNativeWin32;
-import org.lwjgl.glfw.GLFWNativeX11;
 import org.lwjgl.openxr.*;
+import org.lwjgl.sdl.SDLProperties;
+import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.Struct;
-import org.lwjgl.system.linux.X11;
 import org.lwjgl.system.windows.User32;
 import org.lwjgl.vulkan.VK10;
 import org.vivecraft.client_vr.ClientDataHolderVR;
@@ -26,7 +24,6 @@ import java.nio.IntBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 import static org.lwjgl.opengl.GL11.GL_RGB10_A2;
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
@@ -36,7 +33,6 @@ import static org.lwjgl.opengl.GL30.GL_RGB16F;
 import static org.lwjgl.opengl.GL30.GL_RGBA16F;
 import static org.lwjgl.opengl.GL31.GL_RGBA8_SNORM;
 import static org.lwjgl.opengl.GLX13.*;
-import static org.lwjgl.system.MemoryStack.stackInts;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
 public interface DeviceCompat {
@@ -230,33 +226,71 @@ public interface DeviceCompat {
             checkResult(KHROpenGLEnable.xrGetOpenGLGraphicsRequirementsKHR(
                 instance, systemID, graphicsRequirements), "xrGetOpenGLGraphicsRequirementsKHR");
             Window window = Minecraft.getInstance().getWindow();
+            // Minecraft 26.3 uses SDL instead of GLFW, so Window.handle() is an SDL_Window*.
+            // SDL3 removed SDL_GetWindowWMInfo; native handles now come from window properties.
             long windowHandle = window.handle();
+            int properties = SDLVideo.SDL_GetWindowProperties(windowHandle);
             if (Platform.getOSType() == Platform.WINDOWS) {
+                long hwnd = SDLProperties.SDL_GetPointerProperty(
+                    properties, SDLVideo.SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+                long hdc = SDLProperties.SDL_GetPointerProperty(
+                    properties, SDLVideo.SDL_PROP_WINDOW_WIN32_HDC_POINTER, NULL);
+                if (hdc == NULL) {
+                    hdc = User32.GetDC(hwnd);
+                }
                 return XrGraphicsBindingOpenGLWin32KHR.calloc(stack).set(
                     KHROpenGLEnable.XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR,
                     NULL,
-                    User32.GetDC(GLFWNativeWin32.glfwGetWin32Window(windowHandle)),
-                    GLFWNativeWGL.glfwGetWGLContext(windowHandle)
+                    hdc,
+                    SDLVideo.SDL_GL_GetCurrentContext()
                 );
             } else if (Platform.getOSType() == Platform.LINUX) {
-                long xDisplay = GLFWNativeX11.glfwGetX11Display();
-                long glXContext = GLFWNativeGLX.glfwGetGLXContext(windowHandle);
-                long glXWindowHandle = GLFWNativeGLX.glfwGetGLXWindow(windowHandle);
-                int fbXID = glXQueryDrawable(xDisplay, glXWindowHandle, GLX_FBCONFIG_ID);
-                PointerBuffer fbConfigBuf = glXChooseFBConfig(xDisplay, X11.XDefaultScreen(xDisplay),
-                    stackInts(GLX_FBCONFIG_ID, fbXID, 0));
-                if (fbConfigBuf == null) {
-                    throw new IllegalStateException("OpenXR framebuffer config was null");
+                long xDisplay = SDLProperties.SDL_GetPointerProperty(
+                    properties, SDLVideo.SDL_PROP_WINDOW_X11_DISPLAY_POINTER, NULL);
+                long xWindow = SDLProperties.SDL_GetNumberProperty(
+                    properties, SDLVideo.SDL_PROP_WINDOW_X11_WINDOW_NUMBER, NULL);
+                int screen = (int) SDLProperties.SDL_GetNumberProperty(
+                    properties, SDLVideo.SDL_PROP_WINDOW_X11_SCREEN_NUMBER, 0);
+                // SDL exposes neither the window's visual nor its GLX fbconfig, so
+                // read the visual via XGetWindowAttributes and pick the fbconfig
+                // whose visual matches.
+                com.sun.jna.platform.unix.X11.Display display =
+                    new com.sun.jna.platform.unix.X11.Display();
+                display.setPointer(new Pointer(xDisplay));
+                com.sun.jna.platform.unix.X11.Window windowId =
+                    new com.sun.jna.platform.unix.X11.Window(xWindow);
+                com.sun.jna.platform.unix.X11.XWindowAttributes attributes =
+                    new com.sun.jna.platform.unix.X11.XWindowAttributes();
+                com.sun.jna.platform.unix.X11.INSTANCE.XGetWindowAttributes(display, windowId, attributes);
+                attributes.read();
+                long visualID = attributes.visual.getVisualID().longValue();
+
+                long fbConfig = NULL;
+                PointerBuffer configs = glXChooseFBConfig(xDisplay, screen, stack.ints(0));
+                if (configs == null) {
+                    throw new IllegalStateException("OpenXR: no GLX fbconfigs found");
                 }
-                long fbConfig = fbConfigBuf.get();
+                IntBuffer value = stack.callocInt(1);
+                for (int i = 0; i < configs.remaining(); i++) {
+                    long config = configs.get(i);
+                    if (glXGetFBConfigAttrib(xDisplay, config, GLX_VISUAL_ID, value) == 0 &&
+                        value.get(0) == visualID)
+                    {
+                        fbConfig = config;
+                        break;
+                    }
+                }
+                if (fbConfig == NULL) {
+                    throw new IllegalStateException("OpenXR: no GLX fbconfig matches the window visual");
+                }
                 return XrGraphicsBindingOpenGLXlibKHR.calloc(stack).set(
                     KHROpenGLEnable.XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR,
                     NULL,
                     xDisplay,
-                    (int) Objects.requireNonNull(glXGetVisualFromFBConfig(xDisplay, fbConfig)).visualid(),
+                    (int) visualID,
                     fbConfig,
-                    glXWindowHandle,
-                    glXContext
+                    xWindow,
+                    SDLVideo.SDL_GL_GetCurrentContext()
                 );
             }
             throw new IllegalStateException("OpenXR desktop graphics binding is unsupported on this OS");

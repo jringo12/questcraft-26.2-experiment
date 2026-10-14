@@ -9,10 +9,10 @@ import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuSurface;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuSurface;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.*;
 import net.minecraft.client.gui.Gui;
@@ -37,11 +37,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BoatItem;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -52,6 +52,7 @@ import org.spongepowered.asm.mixin.injection.At.Shift;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.vivecraft.api.data.VRBodyPart;
 import org.vivecraft.client.ClientVRPlayers;
 import org.vivecraft.client.VivecraftVRMod;
@@ -99,16 +100,12 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
 
     // On Quest/Android the GLFW window is a hidden dummy SurfaceView. The headset image is submitted
     // through OpenXR instead, so maintaining the Android window swapchain while VR is running is
-    // unnecessary. Minecraft 26.2's Vulkan backend reconfigures that swapchain whenever Android reports
+    // unnecessary. Minecraft's Vulkan backend reconfigures that swapchain whenever Android reports
     // VK_SUBOPTIMAL_KHR; on Quest this can turn into a rapid native/gralloc allocation loop.
     @Unique
     private static final boolean vivecraft$IS_ANDROID =
         System.getProperty("os.version", "").contains("Android") ||
             System.getProperty("java.runtime.name", "").contains("Android");
-
-    // keeps track if an attack was initiated by pressing the attack key
-    @Unique
-    private boolean vivecraft$attackKeyDown;
 
     @Unique
     private CameraType vivecraft$lastCameraType;
@@ -356,7 +353,7 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         }
     }
 
-    @ModifyArg(method = "renderFrame", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V"))
+    @ModifyArg(method = "renderFrame", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;extract(Lnet/minecraft/client/DeltaTracker;Z)V"))
     private boolean vivecraft$renderGUI(boolean renderLevel) {
         if (VRState.VR_RUNNING) {
             // draw screen/gui to buffer
@@ -369,7 +366,7 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         }
     }
 
-    @Inject(method = "renderFrame", at = @At(value = "CONSTANT", args = "stringValue=present"))
+    @Inject(method = "renderFrame", at = @At(value = "CONSTANT", args = "stringValue=swapchainBlit"))
     private void vivecraft$renderVRPassesFabric(
         boolean renderLevel, CallbackInfo ci)
     {
@@ -383,24 +380,24 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         }
     }
 
-    @WrapOperation(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuSurface;isSuboptimal()Z"))
+    @WrapOperation(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;isSuboptimal()Z"))
     private boolean vivecraft$ignoreAndroidWindowSurfaceSuboptimalInVR(GpuSurface instance, Operation<Boolean> original) {
         return VRState.VR_RUNNING && vivecraft$IS_ANDROID ? false : original.call(instance);
     }
 
-    @WrapWithCondition(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuSurface;configure(Lcom/mojang/blaze3d/systems/GpuSurface$Configuration;)V"))
+    @WrapWithCondition(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;configure(Lcom/mojang/renderpearl/api/device/GpuSurface$Configuration;)V"))
     private boolean vivecraft$skipAndroidWindowSurfaceConfigureInVR(
         GpuSurface instance, GpuSurface.Configuration configuration)
     {
         return !(VRState.VR_RUNNING && vivecraft$IS_ANDROID);
     }
 
-    @WrapWithCondition(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuSurface;acquireNextTexture()V"))
+    @WrapWithCondition(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;acquireNextTexture()V"))
     private boolean vivecraft$skipAndroidWindowSurfaceAcquireInVR(GpuSurface instance) {
         return !(VRState.VR_RUNNING && vivecraft$IS_ANDROID);
     }
 
-    @WrapOperation(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/GpuSurface;blitFromTexture(Lcom/mojang/blaze3d/systems/CommandEncoder;Lcom/mojang/blaze3d/textures/GpuTextureView;)V"))
+    @WrapOperation(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"))
     private void vivecraft$blitMirror(
         GpuSurface instance, CommandEncoder commandEncoder, GpuTextureView textureView, Operation<Void> original)
     {
@@ -493,21 +490,27 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         return VRState.VR_RUNNING ? 0L : original;
     }
 
-    @WrapOperation(method = {"continueAttack", "startAttack"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;)V"))
-    private void vivecraft$swingArmAttack(LocalPlayer instance, InteractionHand hand, Operation<Void> original) {
+    @WrapOperation(method = {"continueAttack", "startAttack"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/component/SwingAnimation;Z)Z"))
+    private boolean vivecraft$swingArmAttack(
+        LocalPlayer instance, InteractionHand hand, SwingAnimation animation, boolean sendToSwingingEntity,
+        Operation<Boolean> original)
+    {
         if (VRState.VR_RUNNING) {
             ClientDataHolderVR.getInstance().swingType = VRFirstPersonArmSwing.ATTACK;
         }
-        original.call(instance, hand);
+        return original.call(instance, hand, animation, sendToSwingingEntity);
+    }
+
+    @Inject(method = "startAttack", at = @At("HEAD"))
+    private void vivecraft$resetSwingHit(CallbackInfoReturnable<Boolean> cir) {
+        ClientDataHolderVR.getInstance().swingTracker.resetLastHit();
     }
 
     @WrapWithCondition(method = "continueAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;stopDestroyBlock()V"))
     private boolean vivecraft$destroyReset(MultiPlayerGameMode instance) {
         // only stop destroying blocks when triggered with a button
-        boolean call =
-            !VRState.VR_RUNNING || ClientDataHolderVR.getInstance().vrSettings.seated || this.vivecraft$attackKeyDown;
-        this.vivecraft$attackKeyDown = false;
-        return call;
+        return !VRState.VR_RUNNING || ClientDataHolderVR.getInstance().vrSettings.seated ||
+            !ClientDataHolderVR.getInstance().swingTracker.hasHit();
     }
 
     @WrapWithCondition(method = "continueAttack", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;missTime:I", opcode = Opcodes.PUTFIELD))
@@ -568,12 +571,15 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         }
     }
 
-    @WrapOperation(method = "startUseItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;)V"))
-    private void vivecraft$swingArmUse(LocalPlayer instance, InteractionHand hand, Operation<Void> original) {
+    @WrapOperation(method = "startUseItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/component/SwingAnimation;Z)Z"))
+    private boolean vivecraft$swingArmUse(
+        LocalPlayer instance, InteractionHand hand, SwingAnimation animation, boolean sendToSwingingEntity,
+        Operation<Boolean> original)
+    {
         if (VRState.VR_RUNNING) {
             ClientDataHolderVR.getInstance().swingType = VRFirstPersonArmSwing.USE;
         }
-        original.call(instance, hand);
+        return original.call(instance, hand, animation, sendToSwingingEntity);
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
@@ -755,14 +761,6 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         return !VRState.VR_RUNNING;
     }
 
-    @WrapOperation(method = "handleKeybinds", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;swing(Lnet/minecraft/world/InteractionHand;)V"))
-    private void vivecraft$swingArmDrop(LocalPlayer instance, InteractionHand hand, Operation<Void> original) {
-        if (VRState.VR_RUNNING) {
-            ClientDataHolderVR.getInstance().swingType = VRFirstPersonArmSwing.ATTACK;
-        }
-        original.call(instance, hand);
-    }
-
     @ModifyExpressionValue(method = "handleKeybinds", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/KeyMapping;isDown()Z", ordinal = 2))
     private boolean vivecraft$useKeyOverride(boolean useKeyDown) {
         if (!VRState.VR_RUNNING || ClientDataHolderVR.getInstance().vrSettings.seated) {
@@ -788,12 +786,6 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
         if (VRState.VR_RUNNING) {
             ClientNetworking.resetActiveBodyPart();
         }
-    }
-
-    @Inject(method = "handleKeybinds", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;startAttack()Z"))
-    private void vivecraft$markAttackKeyDown(CallbackInfo ci) {
-        // detect, if the attack button was used to destroy blocks
-        this.vivecraft$attackKeyDown = true;
     }
 
     @ModifyExpressionValue(method = "handleKeybinds", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/MouseHandler;isMouseGrabbed()Z"))
@@ -842,10 +834,10 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
                 if (!ClientDataHolderVR.getInstance().vrSettings.seated || this.gui.screen() != null ||
                     this.level == null)
                 {
-                    InputConstants.grabOrReleaseMouse(this.window, GLFW.GLFW_CURSOR_NORMAL,
+                    InputConstants.releaseMouse(this.window,
                         this.mouseHandler.xpos(), this.mouseHandler.ypos());
                     this.mouseHandler.onMove(this.window.handle(), this.mouseHandler.xpos(),
-                        this.mouseHandler.ypos());
+                        this.mouseHandler.ypos(), 0, 0);
                 }
                 if (ClientDataHolderVR.getInstance().vrSettings.displayMirrorMode == VRSettings.MirrorMode.OFF) {
                     // make sure this is shown at lest once when the text is disabled
@@ -881,13 +873,12 @@ public abstract class MinecraftVRMixin implements MinecraftExtension {
 
                 if (this.gui.screen() != null || this.level == null) {
                     // release mouse
-                    InputConstants.grabOrReleaseMouse(this.window, GLFW.GLFW_CURSOR_NORMAL, mouseX, mouseY);
-                    this.mouseHandler.onMove(this.window.handle(), mouseX, mouseY);
+                    InputConstants.releaseMouse(this.window, mouseX, mouseY);
+                    this.mouseHandler.onMove(this.window.handle(), mouseX, mouseY, 0, 0);
                     this.mouseHandler.releaseMouse();
                 } else {
                     // grab mouse when in a menu
-                    InputConstants.grabOrReleaseMouse(this.window, GLFW.GLFW_CURSOR_DISABLED, mouseX,
-                        mouseY);
+                    InputConstants.grabMouse(this.window, mouseX, mouseY);
                     this.mouseHandler.grabMouse();
                 }
                 // unpress any keys we simulated for VR

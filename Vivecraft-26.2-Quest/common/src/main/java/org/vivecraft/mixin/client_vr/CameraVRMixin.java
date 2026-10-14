@@ -15,6 +15,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.joml.Vector2ic;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -106,9 +107,9 @@ public abstract class CameraVRMixin {
                     } else {
                         if (ShadersHelper.needsSameSizeBuffers()) {
                             // in this case the default aspect is wrong, since it has the aspect of the vr view
-                            WindowExtension window = (WindowExtension) (Object) this.minecraft.getWindow();
-                            width = window.vivecraft$getActualScreenWidth();
-                            height = window.vivecraft$getActualScreenHeight();
+                            Vector2ic windowFramebufferSize = ((WindowExtension) (Object) this.minecraft.getWindow()).vivecraft$getActualFramebufferSize();
+                            width = windowFramebufferSize.x();
+                            height = windowFramebufferSize.y();
                         }
                     }
                 }
@@ -137,7 +138,7 @@ public abstract class CameraVRMixin {
             this.setupPerspective(vivecraft$MIN_CLIP_DISTANCE, this.depthFar,
                 this.minecraft.options.fov().get(), this.minecraft.getWindow().getWidth(),
                 this.minecraft.getWindow().getHeight());
-            this.alignWithEntity(deltaTracker.getGameTimeDeltaPartialTick(true));
+            this.vivecraft$setupVRCamera();
         }
     }
 
@@ -154,6 +155,13 @@ public abstract class CameraVRMixin {
         } else {
             return instance.set(
                 dataHolder.vrRenderer.getCachedProjectionMatrix(dataHolder.currentPass.ordinal(), zNear, zFar));
+        }
+    }
+
+    @Inject(method = "getCameraEntityPartialTicks", at = @At("HEAD"), cancellable = true)
+    private void vivecraft$mainMenuPartialTicks(DeltaTracker deltaTracker, CallbackInfoReturnable<Float> cir) {
+        if (this.level == null) {
+            cir.setReturnValue(deltaTracker.getGameTimeDeltaPartialTick(true));
         }
     }
 
@@ -176,7 +184,7 @@ public abstract class CameraVRMixin {
             }
             return dest;
         } else {
-            if (IrisHelper.isLoaded() && IrisHelper.isShaderActive()) {
+            if (IrisHelper.isLoaded() && IrisHelper.isShaderActive() && IrisHelper.isRegularDepth()) {
                 return dest.set(dataHolder.vrRenderer.getCachedProjectionMatrix(dataHolder.currentPass.ordinal(),
                     this.projection.zNear(), this.projection.zFar()));
             } else {
@@ -189,23 +197,28 @@ public abstract class CameraVRMixin {
     @Inject(method = "alignWithEntity", at = @At("HEAD"), cancellable = true)
     private void vivecraft$setOrientation(float partialTicks, CallbackInfo ci) {
         if (!RenderPassType.isVanilla()) {
-            ClientDataHolderVR dataholder = ClientDataHolderVR.getInstance();
-            RenderPass renderpass = dataholder.currentPass;
-
-            VRData.VRDevicePose eye = dataholder.vrPlayer.getVRDataWorld().getEye(renderpass);
-            this.setPosition(eye.getPosition());
-            // we cannot set the rotation to the full matrix, because particles would rotate with the head
-            // instead of being world up oriented
-            this.setRotation(eye.getYaw(), -eye.getPitch());
-
-            if (ClientDataHolderVR.getInstance().isFirstPass || ShadersHelper.isSlowMode()) {
-                ShadersHelper.SHADOW_CAMERA_POSITION = this.position;
-            }
-
-            // no detaching in VR please
-            this.detached = false;
+            this.vivecraft$setupVRCamera();
             ci.cancel();
         }
+    }
+
+    @Unique
+    private void vivecraft$setupVRCamera() {
+        ClientDataHolderVR dataholder = ClientDataHolderVR.getInstance();
+        RenderPass renderpass = dataholder.currentPass;
+
+        VRData.VRDevicePose eye = dataholder.vrPlayer.getVRDataWorld().getEye(renderpass);
+        this.setPosition(eye.getPosition());
+        // we cannot set the rotation to the full matrix, because particles would rotate with the head
+        // instead of being world up oriented
+        this.setRotation(eye.getYaw(), -eye.getPitch());
+
+        if (ClientDataHolderVR.getInstance().isFirstPass || ShadersHelper.isSlowMode()) {
+            ShadersHelper.SHADOW_CAMERA_POSITION = this.position;
+        }
+
+        // no detaching in VR please
+        this.detached = false;
     }
 
     @Inject(method = "getViewRotationMatrix", at = @At("HEAD"), cancellable = true)

@@ -189,6 +189,10 @@ public class ServerNetworking {
                         new AttackWhileBlockingPayloadS2C(ServerConfig.ALLOW_ATTACKS_WHILE_BLOCKING.get()));
                 }
 
+                if (NetworkVersion.ROOMSCALE_ATTACK_PACKET.accepts(vivePlayer.networkVersion)) {
+                    packetConsumer.accept(new RoomscaleAttackPayloadS2C());
+                }
+
                 packetConsumer.accept(new NetworkVersionPayloadS2C(vivePlayer.networkVersion));
             }
             case IS_VR_ACTIVE -> {
@@ -283,6 +287,13 @@ public class ServerNetworking {
                 .add(((AimPosOverridePayloadC2S) c2sPayload).position().x(),
                     ((AimPosOverridePayloadC2S) c2sPayload).position().y(),
                     ((AimPosOverridePayloadC2S) c2sPayload).position().z());
+            case ROOMSCALE_ATTACK -> {
+                RoomscaleAttackPayloadC2S roomscaleAttack = (RoomscaleAttackPayloadC2S) c2sPayload;
+                vivePlayer.isHitRoomscale = roomscaleAttack.isRoomscaleAttack();
+                if (!vivePlayer.isHitRoomscale) {
+                    vivePlayer.roomscaleHitCount += roomscaleAttack.hitsMade();
+                }
+            }
             // legacy support
             case CONTROLLER0DATA, CONTROLLER1DATA, HEADDATA -> {
                 Map<PayloadIdentifier, VivecraftPayloadC2S> playerData;

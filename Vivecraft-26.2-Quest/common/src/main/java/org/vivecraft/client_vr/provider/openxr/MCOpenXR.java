@@ -12,7 +12,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
@@ -151,7 +151,7 @@ public class MCOpenXR extends MCVR {
         if (action.isActive() && action.isEnabledRaw() &&
             (!ClientDataHolderVR.getInstance().vrSettings.ingameBindingsInGui ||
                 !(action.actionSet == VRInputActionSet.INGAME &&
-                    action.keyBinding.key == InputConstants.Type.MOUSE.getOrCreate(GLFW.GLFW_MOUSE_BUTTON_LEFT) &&
+                    action.keyBinding.key == InputConstants.Type.MOUSE.getOrCreate(SDLMouse.SDL_BUTTON_LEFT) &&
                     this.mc.gui.screen() != null)))
         {
             if (action.isButtonChanged()) {
