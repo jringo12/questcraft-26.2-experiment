@@ -12,6 +12,24 @@ LOCAL_MODULE := openxr_loader
 LOCAL_SRC_FILES := libopenxr_loader.so
 include $(PREBUILT_SHARED_LIBRARY)
 
+# SDL3 (Android bionic build, built from SDL 3.4.14 source in RC1).
+# The APK ships this copy so the ART-side SDL bridge can load it via
+# System.loadLibrary("SDL3"); the game then dlopens the same instance
+# by soname. Prebuilt, like openxr_loader above.
+include $(CLEAR_VARS)
+LOCAL_MODULE := SDL3
+LOCAL_SRC_FILES := libSDL3.so
+include $(PREBUILT_SHARED_LIBRARY)
+
+# QuestCraft SDL bridge glue: one JNI method
+# (SDLActivity.nativeSetMainReady) that calls SDL_SetMainReady() in the
+# already-loaded libSDL3.so. No SDL calls are intercepted.
+include $(CLEAR_VARS)
+LOCAL_MODULE := sdlbridge
+LOCAL_SRC_FILES := sdl_bridge.c
+LOCAL_LDLIBS := -ldl -llog
+include $(BUILD_SHARED_LIBRARY)
+
 include $(CLEAR_VARS)
 # Link GLESv2 for test
 LOCAL_LDLIBS := -ldl -llog -landroid -lGLESv3 -lEGL

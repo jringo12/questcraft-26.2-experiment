@@ -241,6 +241,25 @@ public class JREUtils {
         return true;
     }
 
+    /**
+     * True for Minecraft versions that render via SDL3 instead of GLFW
+     * (26.3+ in the new versioning scheme). Used to gate the SDL bridge:
+     * 26.2 and earlier stay on the GLFW path, fully untouched.
+     * Unparseable / null versions return false (bridge stays inert).
+     */
+    public static boolean isSdlMinecraftVersion(String versionName) {
+        if (versionName == null) return false;
+        try {
+            String[] parts = versionName.trim().split("\\.");
+            if (parts.length < 2) return false;
+            int major = Integer.parseInt(parts[0]);
+            int minor = Integer.parseInt(parts[1]);
+            return major > 26 || (major == 26 && minor >= 3);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     public static int launchJavaVM(final Activity activity, final List<String> JVMArgs, MinecraftInstances.Instance instance) throws Throwable {
         final String graphicsLib = loadGraphicsLibrary();
         List<String> userArgs = getJavaArgs(activity, instance);
@@ -298,6 +317,26 @@ public class JREUtils {
 
         chdir(instance.gameDir);
         userArgs.add(0,"java"); //argv[0] is the program name according to C standard.
+
+        // 6.0.5-RC3 SDL bridge: for SDL versions (26.3+) wire the Unity
+        // activity's Minecraft Surface into SDL BEFORE the game JVM starts,
+        // so the game's SDL_Init / SDL_CreateWindow / SDL_Vulkan_CreateSurface
+        // hit a real ANativeWindow. Inert for 26.2 (GLFW): setup is skipped
+        // entirely. Never fails the launch: a bridge failure just leaves
+        // SDL in its pre-RC3 state.
+        if (isSdlMinecraftVersion(instance.versionName)
+                && activity instanceof UnityPlayerActivity) {
+            try {
+                android.view.Surface surface =
+                        ((UnityPlayerActivity) activity).getMinecraftSurface();
+                boolean sdlReady = org.libsdl.app.SDLActivity.setup(activity, surface);
+                android.util.Log.i("QuestCraft-SDL",
+                        "SDL bridge setup for " + instance.versionName
+                        + ": ready=" + sdlReady);
+            } catch (Throwable t) {
+                android.util.Log.w("QuestCraft-SDL", "SDL bridge setup failed", t);
+            }
+        }
 
         final String[] launchArgs = userArgs.toArray(new String[0]);
         // H6: the backend this launch actually uses (same value

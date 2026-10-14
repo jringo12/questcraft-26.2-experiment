@@ -159,6 +159,18 @@ public class UnityPlayerActivity extends ActivityGroup implements IUnityPlayerLi
             mMinecraftSurface = surface != null && surface.isValid() ? surface : null;
             mMinecraftSurfaceLock.notifyAll();
         }
+        // SDL bridge (26.3+ only): forward the Surface lifecycle so SDL
+        // targets the current ANativeWindow. No-op until the bridge is set
+        // up at launch, so 26.2 / pre-launch surface events are untouched.
+        try {
+            if (surface != null && surface.isValid()) {
+                org.libsdl.app.SDLActivity.updateSurface(surface);
+            } else {
+                org.libsdl.app.SDLActivity.surfaceDestroyed();
+            }
+        } catch (Throwable ignored) {
+            // Bridge must never break the SurfaceView lifecycle.
+        }
     }
 
     public Surface getMinecraftSurface() {
