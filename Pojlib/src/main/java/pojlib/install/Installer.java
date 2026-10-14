@@ -40,10 +40,25 @@ public class Installer {
     private static final String JAVA_25_ASSET = "runtimes/JRE-25.zip";
     private static final String JAVA_MAJOR_MARKER = ".questcraft-java-major";
     private static final String OSHI_ANDROID_SHIM = Constants.USER_HOME + "/hacks/OshiAndroidShim.jar";
-    private static final String PINNED_FABRIC_LOADER = "0.19.3";
-    private static final String PINNED_FABRIC_LOADER_JAR = Constants.USER_HOME +
-        "/libraries/net/fabricmc/fabric-loader/" + PINNED_FABRIC_LOADER +
-        "/fabric-loader-" + PINNED_FABRIC_LOADER + ".jar";
+    // Per-version pinned Fabric loader (mirrors InstanceHandler):
+    // 26.2 -> 0.19.3, 26.3 -> 0.19.5 (Lithium 0.26.2 needs >= 0.19.5 and
+    // MixinExtras >= 0.5.5, bundled in loader 0.19.5).
+    private static final String PINNED_FABRIC_LOADER_26_2 = "0.19.3";
+    private static final String PINNED_FABRIC_LOADER_26_3 = "0.19.5";
+
+    private static String pinnedFabricLoader(String minecraftVersion) {
+        if ("26.2".equals(minecraftVersion)) return PINNED_FABRIC_LOADER_26_2;
+        if ("26.3".equals(minecraftVersion)) return PINNED_FABRIC_LOADER_26_3;
+        return null;
+    }
+
+    private static String pinnedFabricLoaderJar(String minecraftVersion) {
+        String pinned = pinnedFabricLoader(minecraftVersion);
+        if (pinned == null) return null;
+        return Constants.USER_HOME +
+            "/libraries/net/fabricmc/fabric-loader/" + pinned +
+            "/fabric-loader-" + pinned + ".jar";
+    }
 
     // MC versions whose launch assets are refreshed on every launch
     // (bundled Sodium/options re-copied, pinned loader forced first on the
@@ -292,13 +307,18 @@ public class Installer {
     }
 
     private static void refreshFabricLoaderForCurrentLaunch(Activity activity, MinecraftInstances.Instance instance) {
-        File installedLoader = new File(PINNED_FABRIC_LOADER_JAR);
+        String pinnedLoader = pinnedFabricLoader(instance.versionName);
+        if (pinnedLoader == null) {
+            return;
+        }
+        String pinnedLoaderJar = pinnedFabricLoaderJar(instance.versionName);
+        File installedLoader = new File(pinnedLoaderJar);
         if(installedLoader.isFile()) {
             ensureClasspathEntryFirst(instance, installedLoader.getAbsolutePath());
         }
 
         try {
-            FabricMeta.FabricVersion fabricVersion = FabricMeta.getVersion(PINNED_FABRIC_LOADER);
+            FabricMeta.FabricVersion fabricVersion = FabricMeta.getVersion(pinnedLoader);
             if(fabricVersion == null) {
                 return;
             }

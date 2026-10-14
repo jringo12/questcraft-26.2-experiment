@@ -44,14 +44,21 @@ import pojlib.util.json.ModrinthIndexJson;
 public class InstanceHandler {
     public static final String MODS = "https://raw.githubusercontent.com/QuestCraftPlusPlus/Pojlib/refs/heads/" + Constants.GIT_BRANCH + "/mods.json";
     public static final String DEV_MODS = "https://raw.githubusercontent.com/QuestCraftPlusPlus/Pojlib/refs/heads/" + Constants.GIT_BRANCH + "/devmods.json";
-    // Fabric loader pinned for the 26.x line: newer loaders are not
-    // verified against QuestCraft's launch path, so 26.2 and 26.3 both
-    // use this exact loader instead of getLatestVersion().
-    private static final String PINNED_FABRIC_LOADER = "0.19.3";
+    // Fabric loader pinned per MC version: newer loaders are not verified
+    // against QuestCraft's launch path, so each 26.x version uses an exact
+    // loader instead of getLatestVersion().
+    // 26.2 stays on 0.19.3 (its Lithium 0.25.0 works with it).
+    // 26.3 needs 0.19.5: its Lithium 0.26.2 requires fabricloader >= 0.19.5
+    // and mixinextras >= 0.5.5, and loader 0.19.5 bundles MixinExtras 0.5.5.
+    private static final String PINNED_FABRIC_LOADER_26_2 = "0.19.3";
+    private static final String PINNED_FABRIC_LOADER_26_3 = "0.19.5";
 
-    // MC versions that use the pinned Fabric loader above.
-    private static boolean usesPinnedFabricLoader(String minecraftVersion) {
-        return "26.2".equals(minecraftVersion) || "26.3".equals(minecraftVersion);
+    // Returns the pinned Fabric loader for the given MC version, or null to
+    // fall back to getLatestVersion().
+    private static String pinnedFabricLoader(String minecraftVersion) {
+        if ("26.2".equals(minecraftVersion)) return PINNED_FABRIC_LOADER_26_2;
+        if ("26.3".equals(minecraftVersion)) return PINNED_FABRIC_LOADER_26_3;
+        return null;
     }
 
     public static MinecraftInstances.Instance create(Activity activity, MinecraftInstances instances, String instanceName, String userHome, String modLoader, String mrpackFilePath, String imageURL) {
@@ -153,8 +160,9 @@ public class InstanceHandler {
         VersionInfo modLoaderVersionInfo = null;
         switch (modLoader) {
             case "Fabric": {
-                FabricMeta.FabricVersion fabricVersion = usesPinnedFabricLoader(minecraftVersion)
-                        ? FabricMeta.getVersion(PINNED_FABRIC_LOADER)
+                String pinnedLoader = pinnedFabricLoader(minecraftVersion);
+                FabricMeta.FabricVersion fabricVersion = pinnedLoader != null
+                        ? FabricMeta.getVersion(pinnedLoader)
                         : FabricMeta.getLatestVersion();
                 assert fabricVersion != null;
                 modLoaderVersionInfo = FabricMeta.getVersionInfo(fabricVersion, minecraftVersion);
