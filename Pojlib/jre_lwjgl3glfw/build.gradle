@@ -4,7 +4,7 @@ plugins {
 
 group = 'org.lwjgl.glfw'
 
-def baseRuntime = file("base/lwjgl-fcl-vulkan-3.3.6.jar")
+def baseRuntime = file("base/lwjgl-fcl-vulkan-3.4.3.jar")
 def outputRuntime = file("../src/main/assets/lwjgl/lwjgl-glfw-classes.bin")
 
 java {

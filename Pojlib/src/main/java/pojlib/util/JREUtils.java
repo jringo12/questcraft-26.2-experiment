@@ -607,6 +607,7 @@ public class JREUtils {
         userArgs.add("-Dorg.lwjgl.tinyfd.libname=liblwjgl_tinyfd.so");
         userArgs.add("-Dorg.lwjgl.lmdb.libname=liblwjgl_lmdb.so");
         userArgs.add("-Dorg.lwjgl.openvr.libname=liblwjgl_openvr.so");
+        userArgs.add("-Dorg.lwjgl.sdl.libname=libSDL3.so");
         userArgs.add("-Dorg.lwjgl.system.SharedLibraryExtractPath=" + lwjglExtractDir);
     }
 
