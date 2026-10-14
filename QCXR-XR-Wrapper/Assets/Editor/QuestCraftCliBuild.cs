@@ -16,6 +16,15 @@ public static class QuestCraftCliBuild
             Directory.CreateDirectory(outputDirectory);
         }
 
+        // Headless/CI builds: Unity's Android postprocessor does not read
+        // JAVA_HOME / ANDROID_HOME, it uses its own External Tools prefs.
+        // Point those prefs at the toolchain from the environment so the
+        // build works without a pre-configured Editor.
+        var previousSdkRootPath = UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath;
+        var previousNdkRootPath = UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath;
+        var previousJdkRootPath = UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath;
+        ConfigureAndroidToolsFromEnvironment();
+
         EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
         var previousAndroidBuildType = EditorUserBuildSettings.androidBuildType;
         var previousAndroidBuildSystem = EditorUserBuildSettings.androidBuildSystem;
@@ -100,7 +109,32 @@ public static class QuestCraftCliBuild
             PlayerSettings.Android.keystorePass = previousKeystorePass;
             PlayerSettings.Android.keyaliasName = previousKeyaliasName;
             PlayerSettings.Android.keyaliasPass = previousKeyaliasPass;
+            UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = previousSdkRootPath;
+            UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = previousNdkRootPath;
+            UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = previousJdkRootPath;
         }
+    }
+
+    // Sets Unity's Android External Tools paths (SDK/NDK/JDK) from the
+    // standard environment variables when they point at real directories.
+    // Unity's Android postprocessor ignores JAVA_HOME/ANDROID_HOME, so
+    // without this a headless build fails with "JDK not found" even when
+    // a valid JDK is installed.
+    private static void ConfigureAndroidToolsFromEnvironment()
+    {
+        var sdk = Environment.GetEnvironmentVariable("ANDROID_HOME")
+            ?? Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+        if (!string.IsNullOrEmpty(sdk) && Directory.Exists(sdk))
+            UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = sdk;
+
+        var ndk = Environment.GetEnvironmentVariable("ANDROID_NDK_HOME")
+            ?? Environment.GetEnvironmentVariable("ANDROID_NDK_ROOT");
+        if (!string.IsNullOrEmpty(ndk) && Directory.Exists(ndk))
+            UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = ndk;
+
+        var jdk = Environment.GetEnvironmentVariable("JAVA_HOME");
+        if (!string.IsNullOrEmpty(jdk) && Directory.Exists(jdk))
+            UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = jdk;
     }
 
     private static string GetArgument(string name)
