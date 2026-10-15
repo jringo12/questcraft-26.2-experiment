@@ -307,14 +307,41 @@ public final class SDLActivity {
     // ------------------------------------------------------------------
     // Native methods implemented by libSDL3.so (registered in its
     // JNI_OnLoad when System.loadLibrary("SDL3") runs above).
+    //
+    // CRITICAL (6.0.5-RC4): SDL's JNI_OnLoad calls RegisterNatives with
+    // the FULL SDLActivity table (44 methods). RegisterNatives FAILS
+    // (leaving a pending NoSuchMethodError that aborts the launcher
+    // during bridge setup) if ANY listed method is missing from this
+    // class. RC3 declared only 6 of them, so JNI_OnLoad failed and the
+    // process died silently before the game JVM started. EVERY method
+    // in SDL's SDLActivity_tab must be declared here with the EXACT
+    // name + signature, even the ones QuestCraft never calls (they are
+    // inert stubs: SDL only invokes them if the corresponding subsystem
+    // is set up, and the bridge never sets up input/audio/controller).
+    // The same applies to the companion stub classes
+    // SDLInputConnection / SDLAudioManager / SDLControllerManager /
+    // HIDDeviceManager: JNI_OnLoad FindClass'es all five classes, so
+    // all five must exist with their full native tables.
     // ------------------------------------------------------------------
 
+    private static native String nativeGetVersion();
+
     private static native void nativeSetupJNI();
+
+    private static native void nativeInitMainThread();
+
+    private static native void nativeCleanupMainThread();
+
+    private static native int nativeRunMain(String library, String function, Object arguments);
+
+    private static native void onNativeDropFile(String filename);
 
     private static native void nativeSetScreenResolution(
             int surfaceWidth, int surfaceHeight,
             int deviceWidth, int deviceHeight,
             float density, float rate);
+
+    private static native void onNativeResize();
 
     private static native void onNativeSurfaceCreated();
 
@@ -322,7 +349,73 @@ public final class SDLActivity {
 
     private static native void onNativeSurfaceDestroyed();
 
-    private static native void onNativeResize();
+    private static native void onNativeScreenKeyboardShown();
+
+    private static native void onNativeScreenKeyboardHidden();
+
+    private static native void onNativeKeyDown(int keycode);
+
+    private static native void onNativeKeyUp(int keycode);
+
+    private static native boolean onNativeSoftReturnKey();
+
+    private static native void onNativeKeyboardFocusLost();
+
+    private static native void onNativeTouch(int touchDevId, int pointerFingerId,
+            int action, float x, float y, float p);
+
+    private static native void onNativePinchStart();
+
+    private static native void onNativePinchUpdate(float scale);
+
+    private static native void onNativePinchEnd();
+
+    private static native void onNativeMouse(int button, int action, float x, float y, boolean relative);
+
+    private static native void onNativePen(int penId, int device_type, int button,
+            int action, float x, float y, float p);
+
+    private static native void onNativeAccel(float x, float y, float z);
+
+    private static native void onNativeClipboardChanged();
+
+    private static native void nativeLowMemory();
+
+    private static native void onNativeLocaleChanged();
+
+    private static native void onNativeDarkModeChanged(boolean enabled);
+
+    private static native void nativeSendQuit();
+
+    private static native void nativeQuit();
+
+    private static native void nativePause();
+
+    private static native void nativeResume();
+
+    private static native void nativeFocusChanged(boolean hasFocus);
+
+    private static native String nativeGetHint(String name);
+
+    private static native boolean nativeGetHintBoolean(String name, boolean default_value);
+
+    private static native void nativeSetenv(String name, String value);
+
+    private static native void nativeSetNaturalOrientation(int orientation);
+
+    private static native void onNativeRotationChanged(int rotation);
+
+    private static native void onNativeInsetsChanged(int left, int right, int top, int bottom);
+
+    private static native void nativeAddTouch(int touchId, String name);
+
+    private static native void nativePermissionResult(int requestCode, boolean result);
+
+    private static native boolean nativeAllowRecreateActivity();
+
+    private static native int nativeCheckSDLThreadCounter();
+
+    private static native void onNativeFileDialog(int requestCode, String[] filelist, int filter);
 
     // ------------------------------------------------------------------
     // Native method implemented by libsdlbridge.so (QuestCraft glue):
